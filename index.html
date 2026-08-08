@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#17150F" />
+    <title>Fala aí! 开口说葡语 · 西语</title>
+    <meta name="description" content="专为在异国生活设计的口语入门：先会读，再会说，从你最常用的句子学起。" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <style>
+      html, body { margin: 0; padding: 0; background: #F6F2E8; }
+      .boot {
+        min-height: 100vh; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; padding: 30px 24px;
+        font-family: -apple-system, "PingFang SC", "Noto Sans SC", sans-serif;
+        background: #17150F; color: #F6F2E8; text-align: center;
+      }
+      .boot h1 { font-size: 42px; font-weight: 800; margin: 0 0 6px; letter-spacing: -0.5px; }
+      .boot h1 span { color: #F2B33D; }
+      .boot p { font-size: 13.5px; color: #C9C4B4; margin: 0 0 26px; line-height: 1.6; }
+      .bar { width: 190px; height: 6px; border-radius: 99px; background: #33302A; overflow: hidden; position: relative; }
+      .bar i { position: absolute; inset: 0; width: 45%; border-radius: 99px; background: #F2B33D; animation: slide 1.1s ease-in-out infinite; }
+      @keyframes slide { 0% { transform: translateX(-110%); } 100% { transform: translateX(240%); } }
+      @media (prefers-reduced-motion: reduce) { .bar i { animation: none; width: 100%; } }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div class="boot">
+        <h1>Fala aí!<span> 开口说葡语</span></h1>
+        <p>先会读，再会说<br />从你最常用的那句话学起</p>
+        <div class="bar"><i></i></div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
