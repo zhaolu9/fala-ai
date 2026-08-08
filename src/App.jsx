@@ -749,24 +749,27 @@ body { background: var(--areia); }
 .prac-hint { text-align: center; font-size: 11px; color: #8A8578; margin-top: 8px; }
 
 /* 拖动手柄 */
+/* 只有手柄禁止浏览器手势，卡片其余部分保持正常滚动 —— 
+   之前整张卡都设了 touch-action:none，结果把页面滚动也吃掉了 */
 .drag {
-  font-size: 12.5px; font-weight: 700; color: var(--cinza);
-  display: inline-flex; align-items: center; gap: 4px;
-  user-select: none; -webkit-user-select: none;
+  font-size: 12.5px; font-weight: 700; color: var(--tinta);
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 7px 12px; margin: -3px 0; border-radius: 10px;
+  background: var(--areia); border: 2px solid var(--tinta);
+  cursor: grab; flex: 0 0 auto;
+  touch-action: none;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
 }
-/* 排序模式下整张卡片都能拖：关掉浏览器的默认手势接管 */
-.card.sorting {
-  padding-top: 12px; cursor: grab;
-  touch-action: none; user-select: none; -webkit-user-select: none;
-  -webkit-touch-callout: none;
-  transition: box-shadow .15s, border-color .15s;
-}
-.card.sorting:active { cursor: grabbing; }
+.drag:active { cursor: grabbing; background: var(--ipe); }
+
+.card.sorting { padding-top: 12px; }
+/* 让位动画：被拖走后其他卡片平滑移动，看得出会落在哪 */
+.card.editable { transition: transform .18s cubic-bezier(.2,.8,.3,1); }
 .card.dragging {
   outline: 3px solid var(--mata);
   box-shadow: 0 12px 28px rgba(23,21,15,.3);
-  position: relative; opacity: .96;
-  transition: none;              /* 跟手，不要过渡动画拖后腿 */
+  position: relative; opacity: .97;
+  transition: none;              /* 被拖的那张要跟手，不能有过渡 */
 }
 .card.sorting .pt { font-size: 16px; pointer-events: none; }
 .card.sorting .row, .card.sorting .sound { display: none; }
@@ -775,7 +778,7 @@ body { background: var(--areia); }
 .tool-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .tool-row .btn.ghost.on { background: var(--mata); color: #fff; border-color: var(--mata); }
 .sort-tip { font-size: 11.5px; color: var(--cinza); }
-.card.drop-here { border-top: 5px solid var(--mata); }
+
 .lang-pick { width: 100%; margin-bottom: 8px; justify-content: center; }
 .tag.ok { background: #E4EFE9; color: var(--mata); max-width: none; }
 
@@ -1354,7 +1357,21 @@ function PhrasesPage({ showSound, setShowSound, L, custom, order, hidden, edits,
    *     常常是被拖起来的卡片自己，判断会失效）
    */
   const [dropAt, setDropAt] = useState(-1);
-  const [dragDy, setDragDy] = useState(0);   // 卡片跟随手指的位移
+  const [dragDy, setDragDy] = useState(0);   // 被拖卡片跟随手指的位移
+  const [dragFrom, setDragFrom] = useState(-1);
+  const [cardH, setCardH] = useState(0);
+
+  /**
+   * 其他卡片给被拖的卡片让位。
+   * 被拖走的位置空出来，途经的卡片整体上移或下移一个卡片高度，
+   * 这样能看出松手后会落在哪 —— 就是 iOS 列表排序的那种手感。
+   */
+  const shiftFor = (idx) => {
+    if (dragFrom === -1 || dropAt === -1 || !cardH) return 0;
+    if (idx > dragFrom && idx <= dropAt) return -cardH;   // 往下拖：中间的上移
+    if (idx < dragFrom && idx >= dropAt) return cardH;    // 往上拖：中间的下移
+    return 0;
+  };
 
   /**
    * 拖动排序。
@@ -1377,7 +1394,11 @@ function PhrasesPage({ showSound, setShowSound, L, custom, order, hidden, edits,
     const ids = rest.map((x) => x.id);
     const from = ids.indexOf(id);
     const startY = e.clientY;
+    const cardEl = handle.closest("[data-pid]");
+    const h = cardEl ? cardEl.getBoundingClientRect().height + 12 : 0;
+    setCardH(h);
     setDragId(id);
+    setDragFrom(from);
     setDropAt(from);
     setDragDy(0);
 
@@ -1407,6 +1428,7 @@ function PhrasesPage({ showSound, setShowSound, L, custom, order, hidden, edits,
       setDragId(null);
       setDropAt(-1);
       setDragDy(0);
+      setDragFrom(-1);
       if (landing !== from && landing >= 0) {
         const next = [...ids];
         next.splice(landing, 0, next.splice(from, 1)[0]);
@@ -1611,8 +1633,13 @@ function PhrasesPage({ showSound, setShowSound, L, custom, order, hidden, edits,
           className={`card editable ${dragId === it.id ? "dragging" : ""} ${sortMode ? "sorting" : ""} ${dropAt === idx && dragId && dragId !== it.id ? "drop-here" : ""}`}
           key={it.id}
           data-pid={it.id}
-          onPointerDown={sortMode ? (e) => onDragStart(e, it.id) : undefined}
-          style={dragId === it.id ? { transform: `translateY(${dragDy}px)`, zIndex: 50 } : undefined}
+          style={
+            dragId === it.id
+              ? { transform: `translateY(${dragDy}px)`, zIndex: 50 }
+              : dragId
+              ? { transform: `translateY(${shiftFor(idx)}px)` }
+              : undefined
+          }
         >
           <div className="corner" style={{ display: sortMode ? "none" : "flex" }}>
             <button
@@ -1624,7 +1651,10 @@ function PhrasesPage({ showSound, setShowSound, L, custom, order, hidden, edits,
           </div>
           <div className="ord-row">
             {sortMode ? (
-              <span className="drag">☰ 按住拖动</span>
+              <span
+                className="drag"
+                onPointerDown={(e) => onDragStart(e, it.id)}
+              >☰ 按住这里拖动</span>
             ) : (
               <button className="btn ghost mini" onClick={() => startPractice(it.id)}>🔥 开始练</button>
             )}

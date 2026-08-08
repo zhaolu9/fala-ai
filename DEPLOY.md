@@ -35,8 +35,8 @@
 
 在同一个页面往下找 **`环境变量`**（Environment variables）：
 
-- **变量名**：`ANTHROPIC_API_KEY`
-- **值**：粘贴你在 platform.claude.com 创建的那串 key（`sk-ant-` 开头）
+- **变量名**：`DEEPSEEK_API_KEY`
+- **值**：粘贴你在 platform.deepseek.com 创建的那串 key
 
 > ⚠️ 变量名必须**一字不差**，大小写也要对。
 
@@ -71,8 +71,8 @@
 |---|---|
 | 构建失败 | 多半是「构建输出目录」没填 `dist`。去 `设置 → 构建和部署` 改，然后重新部署 |
 | 页面打开是白屏 | 等一分钟刷新；仍不行把 Cloudflare 的构建日志发给 Claude |
-| 翻译提示"服务器未配置 API key" | 环境变量名写错，或加完没有重新部署。改完必须重新部署才生效 |
-| 翻译一直失败 | 去 platform.claude.com 看余额是否为 0 |
+| 翻译提示"服务器未配置 API key" | 环境变量名必须是 `DEEPSEEK_API_KEY`，加完必须重新部署才生效 |
+| 翻译一直失败 | 去 platform.deepseek.com 看余额是否为 0 |
 | 有声音但读得不对 | 手机缺少该语言的语音包，去系统设置里下载「葡萄牙语（巴西）」 |
 
 ---
@@ -89,3 +89,14 @@
 
 把 `src/App.jsx` 里的 `const SEND = false;` 改成 `true`，推到 GitHub 即可。
 埋点已经全部就位，详见 `ANALYTICS.md`。
+
+
+---
+
+## 换 AI 供应商
+
+网关文件 `functions/api/generate.js` 顶部有一个 `PROVIDER` 配置块，
+换供应商只改那三行（地址、模型名、环境变量名），前端一个字都不用动。
+
+注释里已经写好了换回 Claude 的配置，复制粘贴即可。
+支持 OpenAI 兼容格式的服务商（DeepSeek、智谱、通义等）都能这样接。

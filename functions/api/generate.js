@@ -6,17 +6,90 @@
  *  这是整个产品的"关卡"。前端永远不直接调用 AI —— 所有请求
  *  都必须先经过这里。好处：
  *    1. API key 藏在服务器端，绝不暴露给浏览器
- *    2. 这里是永久的控制点：限流、额度、付费、封禁，
- *       将来都只改这一个文件，所有用户立即生效
+ *    2. 这里是永久的控制点：限流、额度、付费、换供应商，
+ *       都只改这一个文件，前端一个字都不用动
  *
- *  当前状态：风控已开启，付费未开启。
+ *  当前供应商：DeepSeek（人民币结算，支付宝可充值）
  *
- *  成本参考（Claude Sonnet）：
- *    翻译一句 ≈ $0.005（约 4 分钱）
- *    新增一门语言 ≈ $0.02
- *  → 正常用户一个月约 $0.3-0.5；真正的风险来自脚本刷量。
+ *  === 想换回 Claude 时，只改下面 PROVIDER 里的三处 ===
+ *  成本参考：
+ *    DeepSeek  翻译一句 ≈ ¥0.003（约 3 厘）
+ *    Claude    翻译一句 ≈ $0.005（约 4 分）
  * ============================================================
  */
+
+/* ------------------------------------------------------------------
+ * 供应商配置 —— 换 AI 服务商只需要改这一块
+ * ------------------------------------------------------------------ */
+
+const PROVIDER = {
+  name: "deepseek",
+  url: "https://api.deepseek.com/chat/completions",
+  model: "deepseek-chat",
+  envKey: "DEEPSEEK_API_KEY",
+};
+
+/* 如果哪天换回 Claude，把上面替换成：
+ * const PROVIDER = {
+ *   name: "anthropic",
+ *   url: "https://api.anthropic.com/v1/messages",
+ *   model: "claude-sonnet-4-6",
+ *   envKey: "ANTHROPIC_API_KEY",
+ * };
+ * 下面的 callAI 会自动按 name 走对应的请求格式。
+ */
+
+/**
+ * 调用 AI，并把不同厂商的返回格式统一成前端认识的样子。
+ *
+ * 前端一直按 Anthropic 的格式解析（data.content[].text），
+ * 所以这里负责把 DeepSeek 的 OpenAI 式返回转换过去 ——
+ * 这样换供应商时，前端 2000 行代码一个字都不用改。
+ */
+async function callAI(key, messages, maxTokens) {
+  if (PROVIDER.name === "anthropic") {
+    const r = await fetch(PROVIDER.url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({ model: PROVIDER.model, max_tokens: maxTokens, messages }),
+    });
+    const data = await r.json();
+    return { ok: r.ok, status: r.status, data, error: data?.error?.message };
+  }
+
+  // OpenAI 兼容格式（DeepSeek、智谱、通义等都用这套）
+  const r = await fetch(PROVIDER.url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + key,
+    },
+    body: JSON.stringify({
+      model: PROVIDER.model,
+      max_tokens: maxTokens,
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      temperature: 0.3,          // 翻译任务要稳定，不要发挥
+      stream: false,
+    }),
+  });
+
+  const data = await r.json();
+  if (!r.ok) {
+    return { ok: false, status: r.status, data, error: data?.error?.message || "上游服务出错" };
+  }
+
+  // 转换成前端认识的 Anthropic 格式
+  const text = data?.choices?.[0]?.message?.content || "";
+  return {
+    ok: true,
+    status: 200,
+    data: { content: [{ type: "text", text }] },
+  };
+}
 
 /* ---------------- 风控阈值 ----------------
  * 真人加句子的节奏：想一句、打字、点生成、等结果 —— 一分钟能做
@@ -140,8 +213,10 @@ export const onRequestPost = async ({ request, env }) => {
     }, 402);
   }
 
-  const key = env.ANTHROPIC_API_KEY;
-  if (!key) return json({ error: "服务器未配置 API key。" }, 500);
+  const key = env[PROVIDER.envKey];
+  if (!key) {
+    return json({ error: `服务器未配置 API key（需要环境变量 ${PROVIDER.envKey}）。` }, 500);
+  }
 
   try {
     const body = await request.json();
@@ -156,25 +231,11 @@ export const onRequestPost = async ({ request, env }) => {
       return json({ error: "请求内容过长。" }, 400);
     }
 
-    const upstream = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: Math.min(max_tokens || 1000, 1500),
-        messages,
-      }),
-    });
-
-    const data = await upstream.json();
-    if (!upstream.ok) {
-      return json({ error: data?.error?.message || "上游服务出错。" }, upstream.status);
+    const result = await callAI(key, messages, Math.min(max_tokens || 1000, 1500));
+    if (!result.ok) {
+      return json({ error: result.error || "上游服务出错。" }, result.status || 500);
     }
-    return json(data);
+    return json(result.data);
   } catch (e) {
     return json({ error: "网关处理失败：" + (e?.message || "未知错误") }, 500);
   }
